@@ -13,6 +13,7 @@ mojo = "==0.26.1"
 
 # ── Feature: test (adds scipy for reference-value benchmarks) ────────────────
 [feature.test.dependencies]
+python = ">=3.13,<3.14"
 scipy = ">=1.14"
 
 [feature.test.tasks]
@@ -24,7 +25,7 @@ test = ["test"]
 
 [tasks]
 # format the code
-format = "pixi run mojo format ./src && pixi run mojo format ./tests"
+format = "pixi run mojo format ./src && pixi run mojo format ./tests && pixi run mojo format ./examples"
 
 # compile the package
 p = "clear && pixi run package"
