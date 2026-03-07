@@ -15,9 +15,11 @@ Provides functions for computing summary statistics of ``List[Float64]`` data:
 - ``kurtosis`` — (Excess) kurtosis (bias-corrected)
 - ``data_min`` — Minimum value
 - ``data_max`` — Maximum value
+- ``gmean`` — Geometric mean
+- ``hmean`` — Harmonic mean
 """
 
-from math import sqrt, nan
+from math import sqrt, nan, log, exp
 
 
 # ===----------------------------------------------------------------------=== #
@@ -259,3 +261,115 @@ fn data_max(data: List[Float64]) -> Float64:
         if data[i] > result:
             result = data[i]
     return result
+
+
+# TODO: Due to limitation in mojo compiler in 0.26.1 (resolved in nightly), we can't have Optional[List].
+# Once we have that, we can make weights optional and handle the unweighted case more cleanly.
+# For now, we can just require an empty list for unweighted case.
+fn gmean(data: List[Float64], weights: List[Float64]) -> Float64:
+    """Compute the weighted geometric mean of a list of values.
+
+    The geometric mean is the nth root of the product of n values. If weights are provided,
+    computes the weighted geometric mean using the formula:
+
+        exp(Σ(wᵢ · log(xᵢ)) / Σwᵢ)
+
+    where xᵢ are the data values and wᵢ are the corresponding weights.
+
+    Args:
+        data: A list of values, which must all be non-negative.
+        weights: A list of weights corresponding to each value in `data`.
+            If weights are provided, they must be the same length as `data`,
+            all weights must be non-negative, and the sum of weights must be greater than zero.
+            If an empty list is provided for weights, all values in `data` are treated as equally weighted.
+
+    Returns:
+        The weighted geometric mean of the values.
+        If `data` is empty, or if weights are provided and have a different length than `data`,
+        or if any weight is negative, or if the total weight is zero,
+        or if any value in `data` is negative, the function returns NaN.
+    """
+    var n = len(data)
+    if n == 0:
+        return nan[DType.float64]()
+
+    var ws = len(weights) > 0
+    if ws:
+        if len(weights) != n:
+            return nan[DType.float64]()
+        var total: Float64 = 0.0
+        for w in weights:
+            if w < 0.0:
+                return nan[DType.float64]()
+            total += w
+
+        if total == 0.0:
+            return nan[DType.float64]()
+        var log_sum: Float64 = 0.0
+        for i in range(n):
+            if data[i] < 0.0:
+                return nan[DType.float64]()
+            log_sum += weights[i] * log(data[i])
+        return exp(log_sum / total)
+
+    var log_sum: Float64 = 0.0
+    for i in range(n):
+        if data[i] < 0.0:
+            return nan[DType.float64]()
+        log_sum += log(data[i])
+    return exp(log_sum / Float64(n))
+
+
+fn hmean(data: List[Float64], weights: List[Float64]) -> Float64:
+    """
+    Compute the weighted harmonic mean of a list of values.
+
+    The harmonic mean is defined as n / (Σ(1/xᵢ)) for n values. If weights are provided,
+    computes the weighted harmonic mean using the formula:
+
+        Σwᵢ / Σ(wᵢ / xᵢ)
+
+    where xᵢ are the data values and wᵢ are the corresponding weights.
+
+    Args:
+        data: A list of positive values (must all be strictly greater than zero).
+        weights: A list of weights corresponding to each value in `data`.
+            If weights are provided, they must be the same length as `data`,
+            all weights must be non-negative, and the sum of weights must be greater than zero.
+            If an empty list is provided for weights, all values in `data` are treated as equally weighted.
+
+    Returns:
+        The weighted harmonic mean of the values.
+        If `data` is empty, or if weights are provided and have a different length than `data`,
+        or if any weight is negative, or if the total weight is zero,
+        or if any value in `data` is zero or negative, the function returns NaN.
+    """
+    var n = len(data)
+    if n == 0:
+        return nan[DType.float64]()
+
+    var ws = len(weights) > 0
+    if ws:
+        if len(weights) != n:
+            return nan[DType.float64]()
+        var total: Float64 = 0.0
+        for w in weights:
+            if w < 0.0:
+                return nan[DType.float64]()
+            total += w
+
+        if total == 0.0:
+            return nan[DType.float64]()
+        var inv_sum: Float64 = 0.0
+        for i in range(n):
+            if data[i] <= 0.0:
+                return nan[DType.float64]()
+            inv_sum += weights[i] / data[i]
+        return total / inv_sum
+
+    var inv_sum: Float64 = 0.0
+    for i in range(n):
+        if data[i] <= 0.0:
+            return nan[DType.float64]()
+        inv_sum += 1.0 / data[i]
+    return Float64(n) / inv_sum
